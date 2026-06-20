@@ -15,7 +15,8 @@ the same time against one shared inventory.
 
 ## Tech
 
-Node.js + Express + better-sqlite3, plain HTML/CSS/JS frontend. No build step.
+Node.js + Express + Node's built-in SQLite (`node:sqlite`), plain HTML/CSS/JS
+frontend. No native modules and no build step.
 
 ## Run locally
 

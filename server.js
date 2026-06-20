@@ -1,5 +1,5 @@
 const express = require("express");
-const Database = require("better-sqlite3");
+const { DatabaseSync } = require("node:sqlite");
 const fs = require("fs");
 const path = require("path");
 
@@ -8,9 +8,9 @@ const path = require("path");
 // so the SQLite file survives redeploys. Locally it defaults to ./data.
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new Database(path.join(DATA_DIR, "inventory.db"));
+const db = new DatabaseSync(path.join(DATA_DIR, "inventory.db"));
 
-db.pragma("journal_mode = WAL");
+db.exec("PRAGMA journal_mode = WAL");
 db.exec(`
   CREATE TABLE IF NOT EXISTS items (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,11 +43,11 @@ app.post("/api/items", (req, res) => {
   const added_at = new Date().toISOString();
   try {
     const info = insertStmt.run(sku, added_at);
-    res.status(201).json({ id: info.lastInsertRowid, sku, added_at });
+    res.status(201).json({ id: Number(info.lastInsertRowid), sku, added_at });
   } catch (err) {
     // Backstop for the rare case two users add the same SKU at the same instant:
     // the UNIQUE constraint rejects the second one.
-    if (err && err.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    if (err && /UNIQUE/i.test(String(err.message))) {
       return res.status(409).json({ error: `SKU "${sku}" already exists.` });
     }
     throw err;
