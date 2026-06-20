@@ -42,7 +42,8 @@ The database file is created at `./data/inventory.db`.
    ```
 
 2. In Railway: **New Project → Deploy from GitHub repo** → pick
-   `smartpneu_inventaire`. Railway auto-detects Node and runs `npm start`.
+   `smartpneu_inventaire`. The included `Dockerfile` builds the image (Node 22),
+   so no builder configuration is needed.
 
 3. **Make storage persistent (important).** SQLite writes to a file, and Railway
    wipes the filesystem on every redeploy unless you attach a Volume:
