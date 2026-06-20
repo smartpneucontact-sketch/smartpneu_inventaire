@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Inventory</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0;
+            --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --err:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+           background: var(--bg); color: var(--text); }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 24px; font-size: .9rem; }
+    .card { background: var(--card); border:1px solid var(--line); border-radius: 12px;
+            padding: 16px; margin-bottom: 16px; }
+    form { display: flex; gap: 8px; }
+    input[type=text] { flex:1; padding: 12px 14px; font-size: 1rem; border-radius: 8px;
+            border:1px solid var(--line); background:#0b1220; color:var(--text); }
+    input[type=text]:focus { outline:none; border-color: var(--accent); }
+    button { padding: 12px 16px; font-size: 1rem; border:0; border-radius: 8px;
+             background: var(--accent); color:#04263b; font-weight:600; cursor:pointer; }
+    button.ghost { background: transparent; color: var(--text); border:1px solid var(--line); font-weight:500; }
+    button:active { transform: translateY(1px); }
+    .msg { min-height: 22px; margin: 10px 2px 0; font-size: .9rem; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--err); }
+    .bar { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
+    .count { color: var(--muted); font-size: .9rem; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align:left; padding: 10px 8px; border-bottom:1px solid var(--line); font-size:.92rem; }
+    th { color: var(--muted); font-weight:500; }
+    td.sku { font-family: ui-monospace, Menlo, monospace; }
+    td.when { color: var(--muted); white-space: nowrap; }
+    .del { background:transparent; color:var(--err); border:0; padding:4px 8px; cursor:pointer; font-size:1rem; }
+    .empty { color: var(--muted); text-align:center; padding: 24px; }
+    .flash { animation: flash .8s ease; }
+    @keyframes flash { from { background:#14532d; } to { background:transparent; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Smart Inventory</h1>
+    <p class="sub">Scan or type a SKU and press Enter. Duplicates are rejected automatically.</p>
+
+    <div class="card">
+      <form id="addForm" autocomplete="off">
+        <input id="sku" type="text" placeholder="Enter SKU…" autofocus />
+        <button type="submit">Add</button>
+      </form>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <div class="bar">
+        <span class="count"><strong id="count">0</strong> items</span>
+        <a href="/api/export.csv"><button class="ghost" type="button">Export CSV</button></a>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>SKU</th><th>Added</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty">No SKUs yet.</div>
+    </div>
+  </div>
+
+  <script>
+    const skuInput = document.getElementById("sku");
+    const msg = document.getElementById("msg");
+    const rows = document.getElementById("rows");
+    const countEl = document.getElementById("count");
+    const emptyEl = document.getElementById("empty");
+
+    function setMsg(text, kind) {
+      msg.textContent = text;
+      msg.className = "msg " + (kind || "");
+    }
+
+    function fmt(iso) {
+      const d = new Date(iso);
+      return d.toLocaleString();
+    }
+
+    function render(items) {
+      countEl.textContent = items.length;
+      emptyEl.style.display = items.length ? "none" : "block";
+      rows.innerHTML = "";
+      items.forEach((it, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          `<td>${items.length - i}</td>` +
+          `<td class="sku"></td>` +
+          `<td class="when">${fmt(it.added_at)}</td>` +
+          `<td><button class="del" title="Delete" data-id="${it.id}">✕</button></td>`;
+        tr.querySelector(".sku").textContent = it.sku;
+        rows.appendChild(tr);
+      });
+    }
+
+    async function load() {
+      const r = await fetch("/api/items");
+      const data = await r.json();
+      render(data.items);
+    }
+
+    document.getElementById("addForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const sku = skuInput.value.trim();
+      if (!sku) return;
+      const r = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sku })
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setMsg(`Added "${data.sku}".`, "ok");
+        skuInput.value = "";
+        await load();
+        const first = rows.querySelector("tr");
+        if (first) first.classList.add("flash");
+      } else {
+        setMsg(data.error || "Error adding SKU.", "err");
+        skuInput.select();
+      }
+      skuInput.focus();
+    });
+
+    rows.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".del");
+      if (!btn) return;
+      await fetch("/api/items/" + btn.dataset.id, { method: "DELETE" });
+      await load();
+      skuInput.focus();
+    });
+
+    load();
+  </script>
+</body>
+</html>
