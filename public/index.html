@@ -3,53 +3,86 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Inventory" />
   <title>Smart Inventory</title>
   <style>
     :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0;
-            --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --err:#ef4444; }
+            --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --err:#ef4444; --warn:#f59e0b; }
     * { box-sizing: border-box; }
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-           background: var(--bg); color: var(--text); }
-    .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+           background: var(--bg); color: var(--text); touch-action: manipulation; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 16px 16px 64px; }
     h1 { font-size: 1.5rem; margin: 0 0 4px; }
-    .sub { color: var(--muted); margin: 0 0 24px; font-size: .9rem; }
+    .sub { color: var(--muted); margin: 0 0 16px; font-size: .9rem; }
     .card { background: var(--card); border:1px solid var(--line); border-radius: 12px;
             padding: 16px; margin-bottom: 16px; }
+    /* The entry box stays at the top while the list scrolls under it. */
+    .entry { position: sticky; top: 8px; z-index: 5; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
     form { display: flex; gap: 8px; }
-    input[type=text] { flex:1; padding: 12px 14px; font-size: 1rem; border-radius: 8px;
-            border:1px solid var(--line); background:#0b1220; color:var(--text); }
+    input[type=text] { flex:1; min-width:0; padding: 14px; font-size: 1.25rem; border-radius: 8px;
+            border:1px solid var(--line); background:#0b1220; color:var(--text);
+            font-family: ui-monospace, Menlo, monospace; }
     input[type=text]:focus { outline:none; border-color: var(--accent); }
     button { padding: 12px 16px; font-size: 1rem; border:0; border-radius: 8px;
-             background: var(--accent); color:#04263b; font-weight:600; cursor:pointer; }
+             background: var(--accent); color:#04263b; font-weight:600; cursor:pointer;
+             touch-action: manipulation; }
+    button.add { padding: 14px 22px; font-size: 1.1rem; }
     button.ghost { background: transparent; color: var(--text); border:1px solid var(--line); font-weight:500; }
+    button.small { padding: 8px 12px; font-size: .85rem; }
     button:active { transform: translateY(1px); }
-    .msg { min-height: 22px; margin: 10px 2px 0; font-size: .9rem; }
-    .msg.ok { color: var(--ok); }
-    .msg.err { color: var(--err); }
-    .bar { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
+    .msg { min-height: 44px; margin: 10px 0 0; padding: 10px 12px; border-radius: 8px;
+           font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+    .msg.ok { background:#14532d; color:#bbf7d0; }
+    .msg.err { background:#7f1d1d; color:#fecaca; }
+    .opts { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px; }
+    .pending { color: var(--warn); font-size:.9rem; font-weight:600; }
+    .bar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom: 12px; }
     .count { color: var(--muted); font-size: .9rem; }
+    .rejects { border-color: var(--err); }
+    .rejects ul { list-style:none; margin:0; padding:0; }
+    .rejects li { padding: 8px 0; border-top:1px solid var(--line); font-size:.92rem; overflow-wrap:anywhere; }
+    .rejects li b { font-family: ui-monospace, Menlo, monospace; color:#fecaca; }
+    .rejects li span { color: var(--muted); }
     table { width:100%; border-collapse: collapse; }
     th, td { text-align:left; padding: 10px 8px; border-bottom:1px solid var(--line); font-size:.92rem; }
     th { color: var(--muted); font-weight:500; }
-    td.sku { font-family: ui-monospace, Menlo, monospace; }
+    td.sku { font-family: ui-monospace, Menlo, monospace; overflow-wrap:anywhere; }
     td.when { color: var(--muted); white-space: nowrap; }
-    .del { background:transparent; color:var(--err); border:0; padding:4px 8px; cursor:pointer; font-size:1rem; }
+    .del { background:transparent; color:var(--err); border:0; padding:8px 12px; cursor:pointer; font-size:1rem; }
     .empty { color: var(--muted); text-align:center; padding: 24px; }
+    .more { text-align:center; padding-top: 12px; }
     .flash { animation: flash .8s ease; }
     @keyframes flash { from { background:#14532d; } to { background:transparent; } }
+    [hidden] { display:none !important; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Smart Inventory</h1>
-    <p class="sub">Scan or type a SKU and press Enter. Duplicates are rejected automatically.</p>
+    <p class="sub">Scan or type a SKU and press Enter. Keep going — each one is sent in the background, and duplicates are rejected automatically.</p>
 
-    <div class="card">
+    <div class="card entry">
       <form id="addForm" autocomplete="off">
-        <input id="sku" type="text" placeholder="Enter SKU…" autofocus />
-        <button type="submit">Add</button>
+        <input id="sku" type="text" placeholder="Enter SKU…" autofocus
+               autocomplete="off" autocorrect="off" autocapitalize="characters"
+               spellcheck="false" enterkeyhint="send" inputmode="text" />
+        <button class="add" type="submit">Add</button>
       </form>
-      <div id="msg" class="msg"></div>
+      <div id="msg" class="msg" aria-live="polite"></div>
+      <div class="opts">
+        <button id="kbBtn" class="ghost small" type="button"></button>
+        <button id="soundBtn" class="ghost small" type="button"></button>
+        <span id="pending" class="pending" hidden></span>
+      </div>
+    </div>
+
+    <div id="rejects" class="card rejects" hidden>
+      <div class="bar">
+        <strong><span id="rejCount">0</span> not added</strong>
+        <button id="rejClear" class="ghost small" type="button">Clear</button>
+      </div>
+      <ul id="rejList"></ul>
     </div>
 
     <div class="card">
@@ -62,15 +95,42 @@
         <tbody id="rows"></tbody>
       </table>
       <div id="empty" class="empty">No SKUs yet.</div>
+      <div id="more" class="more" hidden>
+        <button id="moreBtn" class="ghost small" type="button"></button>
+      </div>
     </div>
   </div>
 
   <script>
+    const RECENT_LIMIT = 100;   // rows shown by default; "Show all" loads the rest
+    const RETRY_MS = 3000;      // wait between attempts when the connection is down
+    const TIMEOUT_MS = 10000;   // give up on one attempt after this long
+
     const skuInput = document.getElementById("sku");
+    const form = document.getElementById("addForm");
     const msg = document.getElementById("msg");
     const rows = document.getElementById("rows");
     const countEl = document.getElementById("count");
     const emptyEl = document.getElementById("empty");
+    const pendingEl = document.getElementById("pending");
+    const kbBtn = document.getElementById("kbBtn");
+    const soundBtn = document.getElementById("soundBtn");
+    const rejectsEl = document.getElementById("rejects");
+    const rejList = document.getElementById("rejList");
+    const rejCount = document.getElementById("rejCount");
+    const moreEl = document.getElementById("more");
+    const moreBtn = document.getElementById("moreBtn");
+
+    // --- Small helpers -------------------------------------------------------
+    // Storage can be unavailable (private browsing); the page must work without it.
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+    };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const newId = () => (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + Math.random().toString(36).slice(2);
 
     function setMsg(text, kind) {
       msg.textContent = text;
@@ -79,63 +139,268 @@
 
     function fmt(iso) {
       const d = new Date(iso);
-      return d.toLocaleString();
+      return isNaN(d) ? "" : d.toLocaleString();
     }
 
-    function render(items) {
-      countEl.textContent = items.length;
-      emptyEl.style.display = items.length ? "none" : "block";
+    // --- Sound feedback (so you do not have to look at the screen) -----------
+    let soundOn = store.get("inv.sound") !== "off";
+    let actx = null;
+    function unlockAudio() {
+      if (!soundOn) return;
+      try {
+        if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+        if (actx.state === "suspended") actx.resume();
+      } catch {}
+    }
+    ["pointerdown", "touchend", "keydown"].forEach((ev) =>
+      document.addEventListener(ev, unlockAudio, { passive: true }));
+
+    function tone(freq, start, dur, type) {
+      if (!soundOn || !actx || actx.state !== "running") return;
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      const t = actx.currentTime + start;
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(gain);
+      gain.connect(actx.destination);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    }
+    const beepOk = () => tone(1047, 0, 0.09, "sine");
+    const beepBad = () => { tone(196, 0, 0.18, "square"); tone(196, 0.24, 0.18, "square"); };
+
+    // --- Options: keyboard type and sound ------------------------------------
+    let kb = store.get("inv.kb") === "num" ? "num" : "text";
+    function applyOptions() {
+      skuInput.setAttribute("inputmode", kb === "num" ? "numeric" : "text");
+      kbBtn.textContent = kb === "num" ? "Keyboard: 123" : "Keyboard: ABC";
+      soundBtn.textContent = soundOn ? "Sound: on" : "Sound: off";
+    }
+    kbBtn.addEventListener("click", () => {
+      kb = kb === "num" ? "text" : "num";
+      store.set("inv.kb", kb);
+      applyOptions();
+      skuInput.blur();   // iOS only swaps the keyboard on a fresh focus
+      skuInput.focus();
+    });
+    soundBtn.addEventListener("click", () => {
+      soundOn = !soundOn;
+      store.set("inv.sound", soundOn ? "on" : "off");
+      applyOptions();
+      unlockAudio();
+      beepOk();
+      skuInput.focus();
+    });
+
+    // Buttons must not take focus away from the SKU box, or iOS hides the keyboard.
+    document.addEventListener("mousedown", (e) => {
+      if (e.target.closest("button")) e.preventDefault();
+    });
+
+    // --- List ----------------------------------------------------------------
+    let total = 0;
+    let showAll = false;
+    let changes = 0;   // bumped on every local change, to discard stale refreshes
+
+    function rowEl(it, n) {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td class="n"></td><td class="sku"></td><td class="when"></td>` +
+        `<td><button class="del" title="Delete" type="button">✕</button></td>`;
+      tr.querySelector(".n").textContent = n;
+      tr.querySelector(".sku").textContent = it.sku;
+      tr.querySelector(".when").textContent = fmt(it.added_at);
+      tr.querySelector(".del").dataset.id = it.id;
+      return tr;
+    }
+
+    function updateSummary() {
+      countEl.textContent = total;
+      emptyEl.hidden = total > 0;
+      const shown = rows.children.length;
+      moreEl.hidden = shown >= total;
+      moreBtn.textContent = `Show all ${total} (showing latest ${shown})`;
+    }
+
+    function render(items, count) {
+      total = count;
+      const frag = document.createDocumentFragment();
+      items.forEach((it, i) => frag.appendChild(rowEl(it, count - i)));
       rows.innerHTML = "";
-      items.forEach((it, i) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML =
-          `<td>${items.length - i}</td>` +
-          `<td class="sku"></td>` +
-          `<td class="when">${fmt(it.added_at)}</td>` +
-          `<td><button class="del" title="Delete" data-id="${it.id}">✕</button></td>`;
-        tr.querySelector(".sku").textContent = it.sku;
-        rows.appendChild(tr);
-      });
+      rows.appendChild(frag);
+      updateSummary();
     }
 
     async function load() {
-      const r = await fetch("/api/items");
-      const data = await r.json();
-      render(data.items);
+      const seen = changes;
+      try {
+        const r = await fetch("/api/items" + (showAll ? "" : "?limit=" + RECENT_LIMIT));
+        if (!r.ok) return;
+        const data = await r.json();
+        if (seen !== changes) return;   // something was added meanwhile; next refresh catches up
+        render(data.items, data.count);
+      } catch {}
     }
 
-    document.getElementById("addForm").addEventListener("submit", async (e) => {
+    moreBtn.addEventListener("click", () => {
+      showAll = true;
+      load();
+      skuInput.focus();
+    });
+
+    // --- Rejected SKUs: stay on screen until cleared --------------------------
+    function addReject(sku, reason) {
+      const li = document.createElement("li");
+      const b = document.createElement("b");
+      const s = document.createElement("span");
+      b.textContent = sku;
+      s.textContent = " — " + reason;
+      li.appendChild(b);
+      li.appendChild(s);
+      rejList.prepend(li);
+      rejCount.textContent = rejList.children.length;
+      rejectsEl.hidden = false;
+    }
+    document.getElementById("rejClear").addEventListener("click", () => {
+      rejList.innerHTML = "";
+      rejectsEl.hidden = true;
+      skuInput.focus();
+    });
+
+    // --- Send queue ----------------------------------------------------------
+    // Each SKU is queued and the box is cleared at once, so the next one can be
+    // typed immediately. The queue is saved on the device and retried until the
+    // server answers, so a dropped connection does not lose anything.
+    const QUEUE_KEY = "inv.queue.v1";
+    let queue = [];
+    try { queue = JSON.parse(store.get(QUEUE_KEY) || "[]") || []; } catch { queue = []; }
+    if (!Array.isArray(queue)) queue = [];
+    let working = false;
+    let offline = false;
+
+    function saveQueue() { store.set(QUEUE_KEY, JSON.stringify(queue)); }
+
+    function updatePending() {
+      pendingEl.hidden = queue.length === 0 || (!offline && queue.length < 2);
+      pendingEl.textContent = offline
+        ? `No connection — ${queue.length} saved on this device, retrying…`
+        : `Sending ${queue.length}…`;
+    }
+
+    function enqueue(sku, quiet) {
+      queue.push({ rid: newId(), sku, quiet: !!quiet });
+      saveQueue();
+      updatePending();
+      pump();
+    }
+
+    async function send(job) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+      try {
+        const r = await fetch("/api/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sku: job.sku, rid: job.rid }),
+          signal: ctl.signal
+        });
+        let data = {};
+        try { data = await r.json(); } catch {}
+        return { status: r.status, data };
+      } catch {
+        return null;   // no connection or timed out
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function pump() {
+      if (working) return;
+      working = true;
+      while (queue.length) {
+        const job = queue[0];
+        const res = await send(job);
+        if (!res || res.status >= 500) {
+          offline = true;
+          updatePending();
+          await sleep(RETRY_MS);
+          continue;
+        }
+        offline = false;
+        queue.shift();
+        saveQueue();
+        updatePending();
+
+        if (res.status === 201) {
+          changes++;
+          total++;
+          const tr = rowEl(res.data, total);
+          tr.classList.add("flash");
+          rows.prepend(tr);
+          updateSummary();
+          setMsg(`✓ ${res.data.sku} added`, "ok");
+          if (!job.quiet) beepOk();
+        } else {
+          const since = res.data.item ? fmt(res.data.item.added_at) : "";
+          const reason = res.status === 409
+            ? "already in inventory" + (since ? ` (added ${since})` : "")
+            : (res.data.error || `error ${res.status}`);
+          addReject(job.sku, reason);
+          setMsg(`✕ ${job.sku} — ${reason}`, "err");
+          if (!job.quiet) beepBad();
+        }
+      }
+      working = false;
+    }
+
+    // --- Entry ---------------------------------------------------------------
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
       const sku = skuInput.value.trim();
-      if (!sku) return;
-      const r = await fetch("/api/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku })
-      });
-      const data = await r.json();
-      if (r.ok) {
-        setMsg(`Added "${data.sku}".`, "ok");
-        skuInput.value = "";
-        await load();
-        const first = rows.querySelector("tr");
-        if (first) first.classList.add("flash");
-      } else {
-        setMsg(data.error || "Error adding SKU.", "err");
-        skuInput.select();
-      }
+      skuInput.value = "";
       skuInput.focus();
+      if (sku) enqueue(sku);
+    });
+
+    // Pasting a list (one SKU per line, or separated by commas, semicolons or
+    // tabs) adds them all in one go.
+    skuInput.addEventListener("paste", (e) => {
+      const text = (e.clipboardData || window.clipboardData).getData("text") || "";
+      const parts = text.split(/[\r\n\t,;]+/).map((s) => s.trim()).filter(Boolean);
+      if (parts.length < 2) return;
+      e.preventDefault();
+      skuInput.value = "";
+      setMsg(`Adding ${parts.length} pasted SKUs…`, "ok");
+      parts.forEach((p) => enqueue(p, true));
     });
 
     rows.addEventListener("click", async (e) => {
       const btn = e.target.closest(".del");
       if (!btn) return;
-      await fetch("/api/items/" + btn.dataset.id, { method: "DELETE" });
-      await load();
       skuInput.focus();
+      try {
+        await fetch("/api/items/" + btn.dataset.id, { method: "DELETE" });
+      } catch {
+        setMsg("Could not delete — no connection.", "err");
+        return;
+      }
+      changes++;
+      await load();
     });
 
+    // Pick up what other people added: when coming back to the page, and every
+    // 30 seconds while nothing is being sent.
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+    setInterval(() => { if (!document.hidden && !queue.length) load(); }, 30000);
+
+    applyOptions();
+    updatePending();
     load();
+    pump();   // resume anything left over from a previous visit
   </script>
 </body>
 </html>

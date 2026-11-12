@@ -7,6 +7,10 @@ the same time against one shared inventory.
 ## Features
 
 - Add SKUs one at a time (scan or type, press Enter)
+- Built for fast entry on iPhone and iPad: the box clears at once and each SKU
+  is sent in the background, with a sound for "added" and "rejected"
+- Works through connection drops: unsent SKUs are kept on the device and retried
+- Paste a list of SKUs (one per line) to add them all in one go
 - Rejects a SKU if it is already in the inventory (case-insensitive)
 - Live list with item count and per-row delete
 - Export everything to a CSV file

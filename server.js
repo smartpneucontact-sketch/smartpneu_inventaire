@@ -22,6 +22,7 @@ db.exec(`
 const insertStmt = db.prepare("INSERT INTO items (sku, added_at) VALUES (?, ?)");
 const findStmt = db.prepare("SELECT id, sku, added_at FROM items WHERE sku = ? COLLATE NOCASE");
 const listStmt = db.prepare("SELECT id, sku, added_at FROM items ORDER BY id DESC");
+const listLimitStmt = db.prepare("SELECT id, sku, added_at FROM items ORDER BY id DESC LIMIT ?");
 const deleteStmt = db.prepare("DELETE FROM items WHERE id = ?");
 const countStmt = db.prepare("SELECT COUNT(*) AS n FROM items");
 
@@ -30,11 +31,25 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// The page retries an add when the connection drops. If the first attempt did
+// reach us, the retry carries the same request id ("rid") and gets the original
+// answer back instead of a misleading "already exists".
+const recentAdds = new Map();
+function rememberAdd(rid, body) {
+  if (!rid) return;
+  recentAdds.set(rid, body);
+  if (recentAdds.size > 2000) recentAdds.delete(recentAdds.keys().next().value);
+}
+
 // Add a SKU. Rejects duplicates (409) and empty input (400).
 app.post("/api/items", (req, res) => {
   const sku = (req.body && req.body.sku ? String(req.body.sku) : "").trim();
   if (!sku) {
     return res.status(400).json({ error: "SKU is required." });
+  }
+  const rid = req.body && typeof req.body.rid === "string" ? req.body.rid.slice(0, 64) : "";
+  if (rid && recentAdds.has(rid)) {
+    return res.status(201).json(recentAdds.get(rid));
   }
   const existing = findStmt.get(sku);
   if (existing) {
@@ -43,7 +58,9 @@ app.post("/api/items", (req, res) => {
   const added_at = new Date().toISOString();
   try {
     const info = insertStmt.run(sku, added_at);
-    res.status(201).json({ id: Number(info.lastInsertRowid), sku, added_at });
+    const item = { id: Number(info.lastInsertRowid), sku, added_at };
+    rememberAdd(rid, item);
+    res.status(201).json(item);
   } catch (err) {
     // Backstop for the rare case two users add the same SKU at the same instant:
     // the UNIQUE constraint rejects the second one.
@@ -54,9 +71,12 @@ app.post("/api/items", (req, res) => {
   }
 });
 
-// List all SKUs (newest first).
+// List SKUs, newest first. ?limit=N returns only the latest N (the count is
+// always the full total), so phones do not download the whole inventory.
 app.get("/api/items", (req, res) => {
-  res.json({ count: countStmt.get().n, items: listStmt.all() });
+  const limit = Number.parseInt(req.query.limit, 10);
+  const items = limit > 0 ? listLimitStmt.all(limit) : listStmt.all();
+  res.json({ count: countStmt.get().n, items });
 });
 
 // Delete one SKU by id.
