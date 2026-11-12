@@ -50,6 +50,7 @@
     td.sku { font-family: ui-monospace, Menlo, monospace; overflow-wrap:anywhere; }
     td.when { color: var(--muted); white-space: nowrap; }
     .del { background:transparent; color:var(--err); border:0; padding:8px 12px; cursor:pointer; font-size:1rem; }
+    .del.armed { background: var(--err); color:#fff; }
     .empty { color: var(--muted); text-align:center; padding: 24px; }
     .more { text-align:center; padding-top: 12px; }
     .flash { animation: flash .8s ease; }
@@ -210,7 +211,7 @@
       const tr = document.createElement("tr");
       tr.innerHTML =
         `<td class="n"></td><td class="sku"></td><td class="when"></td>` +
-        `<td><button class="del" title="Delete" type="button">✕</button></td>`;
+        `<td><button class="del" title="Tap twice to delete" type="button">✕</button></td>`;
       tr.querySelector(".n").textContent = n;
       tr.querySelector(".sku").textContent = it.sku;
       tr.querySelector(".when").textContent = fmt(it.added_at);
@@ -378,16 +379,39 @@
       parts.forEach((p) => enqueue(p, true));
     });
 
+    // Deleting takes two taps on the same ✕: the first one arms it (it turns
+    // red for a moment), the second one deletes. A single stray tap does nothing.
+    const ARM_MS = 1500;
+    let armed = null;
+    let armTimer = null;
+    function disarm() {
+      clearTimeout(armTimer);
+      if (armed) armed.classList.remove("armed");
+      armed = null;
+    }
+
     rows.addEventListener("click", async (e) => {
       const btn = e.target.closest(".del");
       if (!btn) return;
       skuInput.focus();
-      try {
-        await fetch("/api/items/" + btn.dataset.id, { method: "DELETE" });
-      } catch {
-        setMsg("Could not delete — no connection.", "err");
+      const sku = btn.closest("tr").querySelector(".sku").textContent;
+      if (armed !== btn) {
+        disarm();
+        armed = btn;
+        btn.classList.add("armed");
+        armTimer = setTimeout(disarm, ARM_MS);
+        setMsg(`Tap ✕ again to delete ${sku}`, "");
         return;
       }
+      disarm();
+      try {
+        const r = await fetch("/api/items/" + btn.dataset.id, { method: "DELETE" });
+        if (!r.ok && r.status !== 404) throw new Error("delete failed");
+      } catch {
+        setMsg(`Could not delete ${sku} — try again.`, "err");
+        return;
+      }
+      setMsg(`Deleted ${sku}`, "");
       changes++;
       await load();
     });
